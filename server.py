@@ -5,6 +5,9 @@ from flask import Flask, request, jsonify, send_from_directory
 
 app = Flask(__name__, static_folder='public', static_url_path='')
 
+with app.app_context():
+    init_db()
+
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
 def get_db():
