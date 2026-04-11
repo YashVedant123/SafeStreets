@@ -5,9 +5,6 @@ from flask import Flask, request, jsonify, send_from_directory
 
 app = Flask(__name__, static_folder='public', static_url_path='')
 
-with app.app_context():
-    init_db()
-
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
 def get_db():
@@ -105,7 +102,9 @@ def update_status(rid):
     conn.close()
     return jsonify({'ok': True})
 
-if __name__ == '__main__':
+with app.app_context():
     init_db()
+
+if __name__ == '__main__':
     print('\n SafeStreets running → http://localhost:5000\n')
     app.run(debug=True, port=5000)
