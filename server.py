@@ -1,21 +1,23 @@
-import sqlite3, os
+import os
+import psycopg2
+import psycopg2.extras
 from flask import Flask, request, jsonify, send_from_directory
 
 app = Flask(__name__, static_folder='public', static_url_path='')
 
-DB = 'db/safestreets.db'
+DATABASE_URL = os.environ.get('DATABASE_URL')
 
 def get_db():
-    os.makedirs('db', exist_ok=True)
-    conn = sqlite3.connect(DB)
-    conn.row_factory = sqlite3.Row
+    conn = psycopg2.connect(DATABASE_URL, sslmode='require')
+    conn.autocommit = False
     return conn
 
 def init_db():
     conn = get_db()
-    conn.execute( '''
+    cur = conn.cursor()
+    cur.execute('''
         CREATE TABLE IF NOT EXISTS reports (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            id          SERIAL PRIMARY KEY,
             lat         REAL    NOT NULL,
             lng         REAL    NOT NULL,
             issue_type  TEXT    NOT NULL,
@@ -23,24 +25,27 @@ def init_db():
             address     TEXT,
             photo       TEXT,
             status      TEXT    DEFAULT 'pending',
-            created_at  TEXT    DEFAULT (datetime('now'))
+            verified    BOOLEAN DEFAULT FALSE,
+            created_at  TIMESTAMP DEFAULT NOW()
         )
     ''')
     conn.commit()
+    cur.close()
     conn.close()
 
 @app.route('/')
 def index():
-    return send_from_directory('public', 'index.html')
+    return jsonify({'status': 'SafeStreets API running'})
 
 @app.route('/api/reports', methods=['GET'])
 def get_reports():
     conn = get_db()
-    rows = conn.execute(
-        'SELECT * FROM reports ORDER BY created_at DESC'
-    ).fetchall()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute('SELECT * FROM reports ORDER BY created_at DESC')
+    rows = cur.fetchall()
+    cur.close()
     conn.close()
-    return jsonify([dict(row) for row in rows])
+    return jsonify([dict(r) for r in rows])
 
 @app.route('/api/reports', methods=['POST'])
 def create_report():
@@ -48,32 +53,37 @@ def create_report():
     if not all(k in data for k in ['lat', 'lng', 'issue_type']):
         return jsonify({'error': 'Missing required fields'}), 400
     conn = get_db()
-    cur = conn.execute('''
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute('''
         INSERT INTO reports (lat, lng, issue_type, description, address, photo)
-        VALUES (?, ?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        RETURNING *
     ''', (
         data['lat'], data['lng'], data['issue_type'],
         data.get('description', ''),
         data.get('address', ''),
         data.get('photo', '')
     ))
-    rid = cur.lastrowid
+    row = cur.fetchone()
     conn.commit()
-    row = conn.execute('SELECT * FROM reports WHERE id = ?', (rid,)).fetchone()
+    cur.close()
     conn.close()
     return jsonify(dict(row)), 201
 
 @app.route('/api/stats', methods=['GET'])
 def get_stats():
     conn = get_db()
-    total = conn.execute('SELECT COUNT(*) as c FROM reports').fetchone()['c']
-    by_type = conn.execute(
-        'SELECT issue_type, COUNT(*) as count FROM reports '
-        'GROUP BY issue_type ORDER BY count DESC'
-    ).featchAll()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute('SELECT COUNT(*) as c FROM reports')
+    total = cur.fetchone()['c']
+    cur.execute('SELECT issue_type, COUNT(*) as count FROM reports GROUP BY issue_type ORDER BY count DESC')
+    by_type = cur.fetchall()
+    cur.execute('SELECT status, COUNT(*) as count FROM reports GROUP BY status')
+    by_status = cur.fetchall()
+    cur.close()
     conn.close()
     return jsonify({
-        'total': total,
+        'total':     total,
         'by_type':   [dict(r) for r in by_type],
         'by_status': [dict(r) for r in by_status]
     })
@@ -85,9 +95,10 @@ def update_status(rid):
     if data.get('status') not in valid:
         return jsonify({'error': 'Invalid status'}), 400
     conn = get_db()
-    conn.execute('UPDATE reports SET status = ? WHERE id = ?',
-                 (data['status'], rid))
+    cur = conn.cursor()
+    cur.execute('UPDATE reports SET status = %s WHERE id = %s', (data['status'], rid))
     conn.commit()
+    cur.close()
     conn.close()
     return jsonify({'ok': True})
 
