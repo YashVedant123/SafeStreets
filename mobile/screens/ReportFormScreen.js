@@ -4,6 +4,7 @@ import { useState } from 'react';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import { COLORS } from './MapScreen';
+import { API } from '../config';
 
 const ISSUES = [
   { key: 'no_crosswalk',  label: 'No Crosswalk'  },
@@ -13,8 +14,6 @@ const ISSUES = [
   { key: 'no_sidewalk',   label: 'No Sidewalk'    },
   { key: 'other',         label: 'Other'          },
 ];
-
-const MAC_IP = '172.20.10.2';
 
 export default function ReportFormScreen() {
   const [issue,       setIssue]       = useState(null);
@@ -88,7 +87,7 @@ export default function ReportFormScreen() {
     }
     setSubmitting(true);
     try {
-      const res = await fetch(`http://${MAC_IP}:5000/api/reports`, {
+      const res = await fetch(`${API}/api/reports`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

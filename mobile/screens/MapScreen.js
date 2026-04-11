@@ -2,6 +2,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useEffect, useRef } from 'react';
 import MapView, { Marker, Callout } from 'react-native-maps';
+import { API } from '../config';
 
 export const COLORS = {
   bg:      '#0e1117',
@@ -38,8 +39,6 @@ const ISSUE_LABELS = {
   other:         'Other',
 };
 
-const MAC_IP = '172.20.10.2';
-
 const OAKVILLE = {
   latitude:       43.4675,
   longitude:      -79.6877,
@@ -59,7 +58,7 @@ export default function MapScreen({ navigation }) {
 
   async function fetchReports() {
     try {
-      const res  = await fetch(`http://${MAC_IP}:5000/api/reports`);
+      const res  = await fetch(`${API}/api/reports`);
       const data = await res.json();
       setReports(data);
     } catch(e) {
@@ -69,7 +68,7 @@ export default function MapScreen({ navigation }) {
 
   async function fetchStats() {
     try {
-      const res = await fetch(`http://${MAC_IP}:5000/api/stats`);
+      const res = await fetch(`${API}/api/stats`);
       const s   = await res.json();
       const pending  = (s.by_status.find(x => x.status === 'pending')  || {}).count || 0;
       const actioned = (s.by_status.find(x => x.status === 'actioned') || {}).count || 0;
@@ -103,10 +102,18 @@ export default function MapScreen({ navigation }) {
                   <Text style={s.calloutAddr}>{r.address}</Text>
                 ) : null}
                 {r.description ? (
-                  <Text style={s.calloutDesc} numberOfLines={2}>{r.description}</Text>
+                  <Text style={s.calloutDesc} numberOfLines={2}>
+                    {r.description}
+                  </Text>
                 ) : null}
-                <View style={[s.calloutStatus, { backgroundColor: r.status === 'actioned' ? 'rgba(34,197,94,0.15)' : 'rgba(245,158,11,0.15)' }]}>
-                  <Text style={[s.calloutStatusText, { color: r.status === 'actioned' ? COLORS.green : COLORS.amber }]}>
+                <View style={[s.calloutStatus, {
+                  backgroundColor: r.status === 'actioned'
+                    ? 'rgba(34,197,94,0.15)'
+                    : 'rgba(245,158,11,0.15)'
+                }]}>
+                  <Text style={[s.calloutStatusText, {
+                    color: r.status === 'actioned' ? COLORS.green : COLORS.amber
+                  }]}>
                     {r.status}
                   </Text>
                 </View>
@@ -116,7 +123,6 @@ export default function MapScreen({ navigation }) {
         ))}
       </MapView>
 
-      {/* HEADER OVERLAY */}
       <SafeAreaView style={s.headerWrap} edges={['top']} pointerEvents="box-none">
         <View style={s.header}>
           <View>
@@ -152,16 +158,16 @@ export default function MapScreen({ navigation }) {
 }
 
 const darkMapStyle = [
-  { elementType: 'geometry',        stylers: [{ color: '#0e1117' }] },
-  { elementType: 'labels.text.fill',stylers: [{ color: '#8b95a8' }] },
+  { elementType: 'geometry',           stylers: [{ color: '#0e1117' }] },
+  { elementType: 'labels.text.fill',   stylers: [{ color: '#8b95a8' }] },
   { elementType: 'labels.text.stroke', stylers: [{ color: '#0e1117' }] },
-  { featureType: 'road',            elementType: 'geometry', stylers: [{ color: '#1d2535' }] },
-  { featureType: 'road.arterial',   elementType: 'geometry', stylers: [{ color: '#1d2535' }] },
-  { featureType: 'road.highway',    elementType: 'geometry', stylers: [{ color: '#2a3547' }] },
-  { featureType: 'water',           elementType: 'geometry', stylers: [{ color: '#0a0f16' }] },
-  { featureType: 'poi',             elementType: 'geometry', stylers: [{ color: '#161b24' }] },
-  { featureType: 'transit',         elementType: 'geometry', stylers: [{ color: '#161b24' }] },
-  { featureType: 'administrative',  elementType: 'geometry.stroke', stylers: [{ color: '#1d2535' }] },
+  { featureType: 'road',               elementType: 'geometry', stylers: [{ color: '#1d2535' }] },
+  { featureType: 'road.arterial',      elementType: 'geometry', stylers: [{ color: '#1d2535' }] },
+  { featureType: 'road.highway',       elementType: 'geometry', stylers: [{ color: '#2a3547' }] },
+  { featureType: 'water',              elementType: 'geometry', stylers: [{ color: '#0a0f16' }] },
+  { featureType: 'poi',                elementType: 'geometry', stylers: [{ color: '#161b24' }] },
+  { featureType: 'transit',            elementType: 'geometry', stylers: [{ color: '#161b24' }] },
+  { featureType: 'administrative',     elementType: 'geometry.stroke', stylers: [{ color: '#1d2535' }] },
 ];
 
 const s = StyleSheet.create({
