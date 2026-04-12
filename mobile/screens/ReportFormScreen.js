@@ -1,6 +1,7 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState } from 'react';
+import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import { COLORS } from './MapScreen';
@@ -15,26 +16,68 @@ const ISSUES = [
   { key: 'other',         label: 'Other'          },
 ];
 
+const OAKVILLE = {
+  latitude:       43.4675,
+  longitude:      -79.6877,
+  latitudeDelta:  0.06,
+  longitudeDelta: 0.06,
+};
+
+const MAP_HEIGHT = Dimensions.get('window').width * 0.55;
+
+const darkMapStyle = [
+  { elementType: 'geometry',           stylers: [{ color: '#0e1117' }] },
+  { elementType: 'labels.text.fill',   stylers: [{ color: '#8b95a8' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#0e1117' }] },
+  { featureType: 'road',               elementType: 'geometry', stylers: [{ color: '#1d2535' }] },
+  { featureType: 'road.arterial',      elementType: 'geometry', stylers: [{ color: '#1d2535' }] },
+  { featureType: 'road.highway',       elementType: 'geometry', stylers: [{ color: '#2a3547' }] },
+  { featureType: 'water',              elementType: 'geometry', stylers: [{ color: '#0a0f16' }] },
+  { featureType: 'poi',                elementType: 'geometry', stylers: [{ color: '#161b24' }] },
+  { featureType: 'administrative',     elementType: 'geometry.stroke', stylers: [{ color: '#1d2535' }] },
+];
+
 export default function ReportFormScreen() {
   const [issue,       setIssue]       = useState(null);
-  const [lat,         setLat]         = useState(null);
-  const [lng,         setLng]         = useState(null);
+  const [pin,         setPin]         = useState(null);   // { latitude, longitude }
   const [address,     setAddress]     = useState('');
+  const [geocoding,   setGeocoding]   = useState(false);
   const [description, setDescription] = useState('');
   const [photo,       setPhoto]       = useState(null);
-  const [locLabel,    setLocLabel]    = useState(null);
   const [submitting,  setSubmitting]  = useState(false);
 
-  async function getLocation() {
+  async function handleMapPress(e) {
+    const { latitude, longitude } = e.nativeEvent.coordinate;
+    setPin({ latitude, longitude });
+    reverseGeocode(latitude, longitude);
+  }
+
+  async function handleGPS() {
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert('Permission denied', 'Allow location access to use this feature.');
       return;
     }
     const loc = await Location.getCurrentPositionAsync({});
-    setLat(loc.coords.latitude);
-    setLng(loc.coords.longitude);
-    setLocLabel(`${loc.coords.latitude.toFixed(5)}, ${loc.coords.longitude.toFixed(5)}`);
+    const { latitude, longitude } = loc.coords;
+    setPin({ latitude, longitude });
+    reverseGeocode(latitude, longitude);
+  }
+
+  async function reverseGeocode(latitude, longitude) {
+    setGeocoding(true);
+    try {
+      const results = await Location.reverseGeocodeAsync({ latitude, longitude });
+      if (results && results.length > 0) {
+        const r = results[0];
+        const parts = [r.name, r.street, r.city].filter(Boolean);
+        setAddress(parts.join(', '));
+      }
+    } catch(e) {
+      console.log('Reverse geocode failed:', e);
+    } finally {
+      setGeocoding(false);
+    }
   }
 
   async function pickPhoto() {
@@ -81,8 +124,8 @@ export default function ReportFormScreen() {
       Alert.alert('Missing info', 'Please select an issue type.');
       return;
     }
-    if (!lat) {
-      Alert.alert('Missing info', 'Please set your location.');
+    if (!pin) {
+      Alert.alert('Missing info', 'Tap the map to drop a pin on the danger spot.');
       return;
     }
     setSubmitting(true);
@@ -91,7 +134,8 @@ export default function ReportFormScreen() {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          lat, lng,
+          lat:         pin.latitude,
+          lng:         pin.longitude,
           issue_type:  issue,
           description,
           address,
@@ -113,12 +157,10 @@ export default function ReportFormScreen() {
 
   function resetForm() {
     setIssue(null);
-    setLat(null);
-    setLng(null);
+    setPin(null);
     setAddress('');
     setDescription('');
     setPhoto(null);
-    setLocLabel(null);
   }
 
   return (
@@ -136,6 +178,7 @@ export default function ReportFormScreen() {
         keyboardShouldPersistTaps="handled"
       >
 
+        {/* ISSUE TYPE */}
         <View style={s.section}>
           <Text style={s.label}>
             Issue type <Text style={s.req}>*</Text>
@@ -156,29 +199,61 @@ export default function ReportFormScreen() {
           </View>
         </View>
 
+        {/* MAP PIN DROP */}
         <View style={s.section}>
-          <Text style={s.label}>
-            Location <Text style={s.req}>*</Text>
-          </Text>
-          <TouchableOpacity style={s.locBtn} onPress={getLocation} activeOpacity={0.7}>
-            <Text style={s.locTag}>LOC</Text>
-            <Text style={[s.locText, locLabel && s.locTextSet]}>
-              {locLabel || 'Tap to use your current location'}
+          <View style={s.labelRow}>
+            <Text style={s.label}>
+              Location <Text style={s.req}>*</Text>
             </Text>
-          </TouchableOpacity>
+            <TouchableOpacity style={s.gpsBtn} onPress={handleGPS}>
+              <Text style={s.gpsBtnText}>Use GPS</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={s.mapWrap}>
+            <MapView
+              style={s.miniMap}
+              initialRegion={OAKVILLE}
+              customMapStyle={darkMapStyle}
+              onPress={handleMapPress}
+              showsUserLocation
+            >
+              {pin && (
+                <Marker
+                  coordinate={pin}
+                  draggable
+                  onDragEnd={e => {
+                    const { latitude, longitude } = e.nativeEvent.coordinate;
+                    setPin({ latitude, longitude });
+                    reverseGeocode(latitude, longitude);
+                  }}
+                  pinColor={COLORS.green}
+                />
+              )}
+            </MapView>
+            {!pin && (
+              <View style={s.mapHint} pointerEvents="none">
+                <Text style={s.mapHintText}>Tap the map to drop a pin</Text>
+              </View>
+            )}
+          </View>
         </View>
 
+        {/* ADDRESS — auto-filled, editable */}
         <View style={s.section}>
-          <Text style={s.label}>Street / intersection</Text>
+          <Text style={s.label}>
+            Address {geocoding ? <Text style={s.geocodingLabel}> — locating...</Text> : null}
+          </Text>
           <TextInput
             style={s.input}
-            placeholder="e.g. Trafalgar Rd & Dundas St"
+            placeholder="Tap the map to auto-fill"
             placeholderTextColor={COLORS.text3}
             value={address}
             onChangeText={setAddress}
           />
         </View>
 
+        {/* DESCRIPTION */}
         <View style={s.section}>
           <Text style={s.label}>Description</Text>
           <TextInput
@@ -192,6 +267,7 @@ export default function ReportFormScreen() {
           />
         </View>
 
+        {/* PHOTO */}
         <View style={s.section}>
           <Text style={s.label}>Photo (optional)</Text>
           <TouchableOpacity
@@ -206,6 +282,7 @@ export default function ReportFormScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* SUBMIT */}
         <TouchableOpacity
           style={[s.submitBtn, submitting && s.submitBtnDisabled]}
           onPress={submit}
@@ -235,16 +312,20 @@ const s = StyleSheet.create({
   scrollContent:     { padding: 20, gap: 24, paddingBottom: 40 },
   section:           { gap: 10 },
   label:             { fontSize: 13, fontWeight: '500', color: COLORS.text2 },
+  geocodingLabel:    { color: COLORS.text3, fontWeight: '400' },
   req:               { color: COLORS.red },
+  labelRow:          { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  gpsBtn:            { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, backgroundColor: 'rgba(34,197,94,0.12)', borderWidth: 1, borderColor: 'rgba(34,197,94,0.3)' },
+  gpsBtnText:        { fontSize: 12, color: COLORS.green, fontWeight: '500' },
+  mapWrap:           { borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: COLORS.border, height: MAP_HEIGHT },
+  miniMap:           { width: '100%', height: '100%' },
+  mapHint:           { position: 'absolute', bottom: 10, left: 0, right: 0, alignItems: 'center' },
+  mapHintText:       { fontSize: 12, color: COLORS.text3, backgroundColor: COLORS.bg2, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 99, overflow: 'hidden', borderWidth: 1, borderColor: COLORS.border },
   issueGrid:         { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   issueBtn:          { width: '30%', backgroundColor: COLORS.bg3, borderRadius: 12, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: COLORS.border },
   issueBtnActive:    { backgroundColor: 'rgba(34,197,94,0.12)', borderColor: COLORS.green },
   issueLabel:        { fontSize: 12, color: COLORS.text2, textAlign: 'center' },
   issueLabelActive:  { color: COLORS.green },
-  locBtn:            { backgroundColor: COLORS.bg3, borderRadius: 12, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: COLORS.border },
-  locTag:            { fontSize: 10, fontWeight: '600', color: COLORS.green, backgroundColor: 'rgba(34,197,94,0.12)', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 },
-  locText:           { fontSize: 13, color: COLORS.text3, flex: 1 },
-  locTextSet:        { color: COLORS.green },
   input:             { backgroundColor: COLORS.bg3, borderRadius: 12, padding: 14, fontSize: 14, color: COLORS.text, borderWidth: 1, borderColor: COLORS.border },
   textarea:          { minHeight: 100, textAlignVertical: 'top' },
   photoBtn:          { backgroundColor: COLORS.bg3, borderRadius: 12, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: COLORS.border },
