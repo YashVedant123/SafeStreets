@@ -5,34 +5,31 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Text, View } from 'react-native';
 
-import MapScreen     from './screens/MapScreen';
-import ReportsScreen from './screens/ReportsScreen';
+import MapScreen        from './screens/MapScreen';
+import ReportsScreen    from './screens/ReportsScreen';
 import ReportFormScreen from './screens/ReportFormScreen';
 import SettingsScreen   from './screens/SettingsScreen';
-import { COLORS } from './screens/MapScreen';
+import { COLORS }       from './screens/MapScreen';
+import { ThemeProvider, useTheme } from './ThemeContext';
 
 const Tab   = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
 function TabIcon({ label, focused }) {
-  const icons = {
-    'Map':     'MAP',
-    'Reports': 'LIST',
-    'Report':  '+',
-  };
+  const icons = { 'Map': 'MAP', 'Reports': 'LIST', 'Report': '+' };
   return (
     <View style={{
-      alignItems: 'center',
-      justifyContent: 'center',
-      width: 44,
-      height: 28,
-      borderRadius: 8,
+      alignItems:      'center',
+      justifyContent:  'center',
+      width:           44,
+      height:          28,
+      borderRadius:    8,
       backgroundColor: focused ? 'rgba(34,197,94,0.12)' : 'transparent',
     }}>
       <Text style={{
-        fontSize:   label === 'Report' ? 20 : 11,
-        fontWeight: '600',
-        color:      focused ? COLORS.green : COLORS.text3,
+        fontSize:      label === 'Report' ? 20 : 11,
+        fontWeight:    '600',
+        color:         focused ? COLORS.green : COLORS.text3,
         letterSpacing: 0.5,
       }}>
         {icons[label]}
@@ -42,28 +39,27 @@ function TabIcon({ label, focused }) {
 }
 
 function MainTabs() {
+  const { dark } = useTheme();
+
+  const bg     = dark ? COLORS.bg2    : '#ffffff';
+  const border = dark ? COLORS.border : 'rgba(0,0,0,0.08)';
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarStyle: {
-          backgroundColor:  COLORS.bg2,
-          borderTopColor:   COLORS.border,
-          borderTopWidth:   1,
-          height:           85,
-          paddingBottom:    20,
-          paddingTop:       10,
+          backgroundColor: bg,
+          borderTopColor:  border,
+          borderTopWidth:  1,
+          height:          85,
+          paddingBottom:   20,
+          paddingTop:      10,
         },
         tabBarActiveTintColor:   COLORS.green,
-        tabBarInactiveTintColor: COLORS.text3,
-        tabBarLabelStyle: {
-          fontSize:   11,
-          fontWeight: '500',
-          marginTop:  4,
-        },
-        tabBarIcon: ({ focused }) => (
-          <TabIcon label={route.name} focused={focused} />
-        ),
+        tabBarInactiveTintColor: dark ? COLORS.text3 : '#9ca3af',
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '500', marginTop: 4 },
+        tabBarIcon: ({ focused }) => <TabIcon label={route.name} focused={focused} />,
       })}
     >
       <Tab.Screen name="Map"     component={MapScreen}        />
@@ -73,22 +69,28 @@ function MainTabs() {
   );
 }
 
+function Root() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="Main"     component={MainTabs}     />
+      <Stack.Screen
+        name="Settings"
+        component={SettingsScreen}
+        options={{ animation: 'slide_from_right' }}
+      />
+    </Stack.Navigator>
+  );
+}
+
 export default function App() {
   return (
-    <SafeAreaProvider>
-      <NavigationContainer>
-        <StatusBar style="light" />
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="Main"     component={MainTabs}     />
-          <Stack.Screen
-            name="Settings"
-            component={SettingsScreen}
-            options={{
-              animation: 'slide_from_right',
-            }}
-          />
-        </Stack.Navigator>
-      </NavigationContainer>
-    </SafeAreaProvider>
+    <ThemeProvider>
+      <SafeAreaProvider>
+        <NavigationContainer>
+          <StatusBar style="light" />
+          <Root />
+        </NavigationContainer>
+      </SafeAreaProvider>
+    </ThemeProvider>
   );
 }

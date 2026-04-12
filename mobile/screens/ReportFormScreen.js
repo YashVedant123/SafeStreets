@@ -65,20 +65,27 @@ export default function ReportFormScreen() {
   }
 
   async function reverseGeocode(latitude, longitude) {
-    setGeocoding(true);
-    try {
-      const results = await Location.reverseGeocodeAsync({ latitude, longitude });
-      if (results && results.length > 0) {
-        const r = results[0];
-        const parts = [r.name, r.street, r.city].filter(Boolean);
-        setAddress(parts.join(', '));
-      }
-    } catch(e) {
-      console.log('Reverse geocode failed:', e);
-    } finally {
-      setGeocoding(false);
+  setGeocoding(true);
+  try {
+    const results = await Location.reverseGeocodeAsync({ latitude, longitude });
+    if (results && results.length > 0) {
+      const r = results[0];
+      // Build intersection-style address
+      const street = r.street ? r.street : null;
+      const name   = r.name && isNaN(r.name) ? r.name : null; // skip if name is just a number
+      const district = r.district || r.subregion || null;
+      const city   = r.city || 'Oakville';
+      const parts  = [name !== street ? name : null, street, district, city]
+        .filter(Boolean)
+        .filter((v, i, arr) => arr.indexOf(v) === i); // dedupe
+      setAddress(parts.join(', '));
     }
+  } catch(e) {
+    console.log('Reverse geocode failed:', e);
+  } finally {
+    setGeocoding(false);
   }
+}
 
   async function pickPhoto() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
