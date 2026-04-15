@@ -2,6 +2,7 @@ import os
 import json
 import sqlite3
 from datetime import datetime
+from pathlib import Path
 from groq import Groq
 from flask import Flask, request, jsonify
 from dotenv import load_dotenv
@@ -16,6 +17,9 @@ ADMIN_KEY    = os.environ.get('ADMIN_KEY', 'changeme')
 
 gc = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
+# Get the directory where this script is located
+BASE_DIR = Path(__file__).parent.absolute()
+
 # Use PostgreSQL if DATABASE_URL is set, otherwise use SQLite
 USE_POSTGRES = DATABASE_URL is not None
 
@@ -25,7 +29,8 @@ if USE_POSTGRES:
 
 # Ensure db directory exists for SQLite
 if not USE_POSTGRES:
-    os.makedirs('db', exist_ok=True)
+    db_dir = BASE_DIR / 'db'
+    db_dir.mkdir(exist_ok=True)
 
 # ── DB ────────────────────────────────────────────────────────────────────────
 
@@ -35,7 +40,8 @@ def get_db():
         conn.autocommit = False
         return conn
     else:
-        conn = sqlite3.connect('db/safestreets.db')
+        db_file = BASE_DIR / 'db' / 'safestreets.db'
+        conn = sqlite3.connect(str(db_file))
         conn.row_factory = sqlite3.Row
         return conn
 
