@@ -1,7 +1,7 @@
 import os
-import psycopg2
-import psycopg2.extras
 import json
+import sqlite3
+from datetime import datetime
 from groq import Groq
 from flask import Flask, request, jsonify
 from dotenv import load_dotenv
@@ -16,32 +16,63 @@ ADMIN_KEY    = os.environ.get('ADMIN_KEY', 'changeme')
 
 gc = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
+# Use PostgreSQL if DATABASE_URL is set, otherwise use SQLite
+USE_POSTGRES = DATABASE_URL is not None
+
+if USE_POSTGRES:
+    import psycopg2
+    import psycopg2.extras
+
 # ── DB ────────────────────────────────────────────────────────────────────────
 
 def get_db():
-    conn = psycopg2.connect(DATABASE_URL, sslmode='require')
-    conn.autocommit = False
-    return conn
+    if USE_POSTGRES:
+        conn = psycopg2.connect(DATABASE_URL, sslmode='require')
+        conn.autocommit = False
+        return conn
+    else:
+        conn = sqlite3.connect('db/safestreets.db')
+        conn.row_factory = sqlite3.Row
+        return conn
 
 def init_db():
     conn = get_db()
-    cur  = conn.cursor()
-    cur.execute('''
-        CREATE TABLE IF NOT EXISTS reports (
-            id          SERIAL PRIMARY KEY,
-            lat         REAL    NOT NULL,
-            lng         REAL    NOT NULL,
-            issue_type  TEXT    NOT NULL,
-            description TEXT,
-            address     TEXT,
-            photo       TEXT,
-            status      TEXT    DEFAULT 'pending',
-            verified    BOOLEAN DEFAULT FALSE,
-            spam_score  INTEGER DEFAULT 0,
-            spam_reason TEXT,
-            created_at  TIMESTAMP DEFAULT NOW()
-        )
-    ''')
+    if USE_POSTGRES:
+        cur  = conn.cursor()
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS reports (
+                id          SERIAL PRIMARY KEY,
+                lat         REAL    NOT NULL,
+                lng         REAL    NOT NULL,
+                issue_type  TEXT    NOT NULL,
+                description TEXT,
+                address     TEXT,
+                photo       TEXT,
+                status      TEXT    DEFAULT 'pending',
+                verified    BOOLEAN DEFAULT FALSE,
+                spam_score  INTEGER DEFAULT 0,
+                spam_reason TEXT,
+                created_at  TIMESTAMP DEFAULT NOW()
+            )
+        ''')
+    else:
+        cur  = conn.cursor()
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS reports (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                lat         REAL    NOT NULL,
+                lng         REAL    NOT NULL,
+                issue_type  TEXT    NOT NULL,
+                description TEXT,
+                address     TEXT,
+                photo       TEXT,
+                status      TEXT    DEFAULT 'pending',
+                verified    BOOLEAN DEFAULT FALSE,
+                spam_score  INTEGER DEFAULT 0,
+                spam_reason TEXT,
+                created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
     conn.commit()
     cur.close()
     conn.close()
@@ -116,17 +147,22 @@ def index():
 @app.route('/api/reports', methods=['GET'])
 def get_reports():
     conn = get_db()
-    cur  = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur  = conn.cursor()
     cur.execute('''
         SELECT * FROM reports
         WHERE status != 'rejected'
         AND (spam_score >= 60 OR spam_score = 0)
         ORDER BY created_at DESC
     ''')
-    rows = cur.fetchall()
+    if USE_POSTGRES:
+        rows = cur.fetchall()
+        result = [dict(r) for r in rows]
+    else:
+        rows = cur.fetchall()
+        result = [dict(r) for r in rows]
     cur.close()
     conn.close()
-    return jsonify([dict(r) for r in rows])
+    return jsonify(result)
 
 @app.route('/api/reports/flagged', methods=['GET'])
 def get_flagged():
@@ -134,16 +170,17 @@ def get_flagged():
     if secret != ADMIN_KEY:
         return jsonify({'error': 'Unauthorized'}), 401
     conn = get_db()
-    cur  = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur  = conn.cursor()
     cur.execute('''
         SELECT * FROM reports
         WHERE spam_score BETWEEN 30 AND 59
         ORDER BY created_at DESC
     ''')
     rows = cur.fetchall()
+    result = [dict(r) for r in rows]
     cur.close()
     conn.close()
-    return jsonify([dict(r) for r in rows])
+    return jsonify(result)
 
 @app.route('/api/reports', methods=['POST'])
 def create_report():
@@ -159,30 +196,54 @@ def create_report():
     db_status = 'pending' if action == 'approve' else 'flagged'
 
     conn = get_db()
-    cur  = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    cur.execute('''
-        INSERT INTO reports
-            (lat, lng, issue_type, description, address, photo, status, spam_score, spam_reason)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-        RETURNING *
-    ''', (
-        data['lat'],
-        data['lng'],
-        data['issue_type'],
-        data.get('description', ''),
-        data.get('address',     ''),
-        data.get('photo',       ''),
-        db_status,
-        score,
-        reason,
-    ))
-    row = cur.fetchone()
+    cur  = conn.cursor()
+    
+    if USE_POSTGRES:
+        cur.execute('''
+            INSERT INTO reports
+                (lat, lng, issue_type, description, address, photo, status, spam_score, spam_reason)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING *
+        ''', (
+            data['lat'],
+            data['lng'],
+            data['issue_type'],
+            data.get('description', ''),
+            data.get('address',     ''),
+            data.get('photo',       ''),
+            db_status,
+            score,
+            reason,
+        ))
+        row = cur.fetchone()
+        result = dict(row)
+    else:
+        cur.execute('''
+            INSERT INTO reports
+                (lat, lng, issue_type, description, address, photo, status, spam_score, spam_reason)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            data['lat'],
+            data['lng'],
+            data['issue_type'],
+            data.get('description', ''),
+            data.get('address',     ''),
+            data.get('photo',       ''),
+            db_status,
+            score,
+            reason,
+        ))
+        report_id = cur.lastrowid
+        cur.execute('SELECT * FROM reports WHERE id = ?', (report_id,))
+        row = cur.fetchone()
+        result = dict(row) if row else {}
+    
     conn.commit()
     cur.close()
     conn.close()
 
     return jsonify({
-        **dict(row),
+        **result,
         'flagged': action == 'flag',
         'message': 'Report submitted for review' if action == 'flag' else 'Report submitted',
     }), 201
@@ -190,27 +251,31 @@ def create_report():
 @app.route('/api/stats', methods=['GET'])
 def get_stats():
     conn = get_db()
-    cur  = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur  = conn.cursor()
     cur.execute('SELECT COUNT(*) as c FROM reports WHERE spam_score >= 60 OR spam_score = 0')
-    total = cur.fetchone()['c']
+    row = cur.fetchone()
+    total = dict(row)['c'] if row else 0
+    
     cur.execute('''
         SELECT issue_type, COUNT(*) as count FROM reports
         WHERE spam_score >= 60 OR spam_score = 0
         GROUP BY issue_type ORDER BY count DESC
     ''')
-    by_type = cur.fetchall()
+    by_type = [dict(r) for r in cur.fetchall()]
+    
     cur.execute('''
         SELECT status, COUNT(*) as count FROM reports
         WHERE spam_score >= 60 OR spam_score = 0
         GROUP BY status
     ''')
-    by_status = cur.fetchall()
+    by_status = [dict(r) for r in cur.fetchall()]
+    
     cur.close()
     conn.close()
     return jsonify({
         'total':     total,
-        'by_type':   [dict(r) for r in by_type],
-        'by_status': [dict(r) for r in by_status],
+        'by_type':   by_type,
+        'by_status': by_status,
     })
 
 @app.route('/api/reports/<int:rid>/status', methods=['PATCH'])
@@ -221,7 +286,10 @@ def update_status(rid):
         return jsonify({'error': 'Invalid status'}), 400
     conn = get_db()
     cur  = conn.cursor()
-    cur.execute('UPDATE reports SET status = %s WHERE id = %s', (data['status'], rid))
+    if USE_POSTGRES:
+        cur.execute('UPDATE reports SET status = %s WHERE id = %s', (data['status'], rid))
+    else:
+        cur.execute('UPDATE reports SET status = ? WHERE id = ?', (data['status'], rid))
     conn.commit()
     cur.close()
     conn.close()
