@@ -1,1 +1,1 @@
-export const API = 'https://safestreets-v0kj.onrender.com';
+export const API = 'https://safestreets-api.onrender.com';
