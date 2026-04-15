@@ -23,6 +23,10 @@ if USE_POSTGRES:
     import psycopg2
     import psycopg2.extras
 
+# Ensure db directory exists for SQLite
+if not USE_POSTGRES:
+    os.makedirs('db', exist_ok=True)
+
 # ── DB ────────────────────────────────────────────────────────────────────────
 
 def get_db():
