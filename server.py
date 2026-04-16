@@ -5,11 +5,13 @@ from datetime import datetime
 from pathlib import Path
 from groq import Groq
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 from dotenv import load_dotenv
 
 load_dotenv()
 
 app = Flask(__name__, static_folder='public', static_url_path='')
+CORS(app)  # Enable CORS for all routes
 
 DATABASE_URL = os.environ.get('DATABASE_URL')
 GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
