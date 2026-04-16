@@ -16,6 +16,12 @@ const ISSUES = [
   { key: 'other',         label: 'Other'          },
 ];
 
+const URGENCY_LEVELS = [
+  { key: 'low',    label: 'Low',    color: '#3b82f6' },    // blue
+  { key: 'medium', label: 'Medium', color: '#f59e0b' },    // amber
+  { key: 'high',   label: 'High',   color: '#ef4444' },    // red
+];
+
 const OAKVILLE = {
   latitude:       43.4675,
   longitude:      -79.6877,
@@ -39,6 +45,7 @@ const darkMapStyle = [
 
 export default function ReportFormScreen() {
   const [issue,       setIssue]       = useState(null);
+  const [urgency,     setUrgency]     = useState('medium');
   const [pin,         setPin]         = useState(null);   // { latitude, longitude }
   const [address,     setAddress]     = useState('');
   const [geocoding,   setGeocoding]   = useState(false);
@@ -144,6 +151,7 @@ export default function ReportFormScreen() {
           lat:         pin.latitude,
           lng:         pin.longitude,
           issue_type:  issue,
+          urgency,
           description,
           address,
           photo: photo || '',
@@ -164,6 +172,7 @@ export default function ReportFormScreen() {
 
   function resetForm() {
     setIssue(null);
+    setUrgency('medium');
     setPin(null);
     setAddress('');
     setDescription('');
@@ -200,6 +209,25 @@ export default function ReportFormScreen() {
               >
                 <Text style={[s.issueLabel, issue === item.key && s.issueLabelActive]}>
                   {item.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* URGENCY LEVEL */}
+        <View style={s.section}>
+          <Text style={s.label}>Urgency level</Text>
+          <View style={s.urgencyRow}>
+            {URGENCY_LEVELS.map(u => (
+              <TouchableOpacity
+                key={u.key}
+                style={[s.urgencyBtn, { borderColor: u.color }, urgency === u.key && { backgroundColor: u.color }]}
+                onPress={() => setUrgency(u.key)}
+                activeOpacity={0.7}
+              >
+                <Text style={[s.urgencyLabel, urgency === u.key && s.urgencyLabelActive]}>
+                  {u.label}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -333,6 +361,10 @@ const s = StyleSheet.create({
   issueBtnActive:    { backgroundColor: 'rgba(34,197,94,0.12)', borderColor: COLORS.green },
   issueLabel:        { fontSize: 12, color: COLORS.text2, textAlign: 'center' },
   issueLabelActive:  { color: COLORS.green },
+  urgencyRow:        { flexDirection: 'row', gap: 12 },
+  urgencyBtn:        { flex: 1, backgroundColor: COLORS.bg3, borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 2 },
+  urgencyLabel:      { fontSize: 12, color: COLORS.text2, fontWeight: '500' },
+  urgencyLabelActive:{ color: '#ffffff' },
   input:             { backgroundColor: COLORS.bg3, borderRadius: 12, padding: 14, fontSize: 14, color: COLORS.text, borderWidth: 1, borderColor: COLORS.border },
   textarea:          { minHeight: 100, textAlignVertical: 'top' },
   photoBtn:          { backgroundColor: COLORS.bg3, borderRadius: 12, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: COLORS.border },
