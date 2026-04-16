@@ -7,7 +7,11 @@ from groq import Groq
 from flask import Flask, request, jsonify
 from dotenv import load_dotenv
 
-load_dotenv()
+# Load environment variables (safe if .env doesn't exist)
+try:
+    load_dotenv()
+except:
+    pass
 
 app = Flask(__name__, static_folder='public', static_url_path='')
 
@@ -314,7 +318,11 @@ def update_status(rid):
     return jsonify({'ok': True})
 
 with app.app_context():
-    init_db()
+    try:
+        init_db()
+    except Exception as e:
+        print(f'Warning: Database initialization failed: {e}')
+        # Continue anyway - table might already exist
 
 if __name__ == '__main__':
     print('\n SafeStreets running → http://localhost:5000\n')
