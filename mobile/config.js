@@ -1,1 +1,1 @@
-export const API = 'https://safestreets-api.onrender.com';
+export const API = 'https://yashvedant.pythonanywhere.com';
