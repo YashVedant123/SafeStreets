@@ -70,6 +70,7 @@ def init_db():
                 description TEXT,
                 address     TEXT,
                 photo       TEXT,
+                urgency     TEXT    DEFAULT 'medium',
                 status      TEXT    DEFAULT 'pending',
                 verified    BOOLEAN DEFAULT FALSE,
                 spam_score  INTEGER DEFAULT 0,
@@ -88,6 +89,7 @@ def init_db():
                 description TEXT,
                 address     TEXT,
                 photo       TEXT,
+                urgency     TEXT    DEFAULT 'medium',
                 status      TEXT    DEFAULT 'pending',
                 verified    BOOLEAN DEFAULT FALSE,
                 spam_score  INTEGER DEFAULT 0,
@@ -223,8 +225,8 @@ def create_report():
     if USE_POSTGRES:
         cur.execute('''
             INSERT INTO reports
-                (lat, lng, issue_type, description, address, photo, status, spam_score, spam_reason)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                (lat, lng, issue_type, description, address, photo, urgency, status, spam_score, spam_reason)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING *
         ''', (
             data['lat'],
@@ -233,6 +235,7 @@ def create_report():
             data.get('description', ''),
             data.get('address',     ''),
             data.get('photo',       ''),
+            data.get('urgency',     'medium'),
             db_status,
             score,
             reason,
@@ -242,8 +245,8 @@ def create_report():
     else:
         cur.execute('''
             INSERT INTO reports
-                (lat, lng, issue_type, description, address, photo, status, spam_score, spam_reason)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (lat, lng, issue_type, description, address, photo, urgency, status, spam_score, spam_reason)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             data['lat'],
             data['lng'],
@@ -251,6 +254,7 @@ def create_report():
             data.get('description', ''),
             data.get('address',     ''),
             data.get('photo',       ''),
+            data.get('urgency',     'medium'),
             db_status,
             score,
             reason,
